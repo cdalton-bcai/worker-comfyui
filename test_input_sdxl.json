@@ -1,0 +1,84 @@
+{
+  "input": {
+    "workflow": {
+      "4": {
+        "inputs": {
+          "ckpt_name": "lustifySDXLNSFW_ggwpV7.safetensors"
+        },
+        "class_type": "CheckpointLoaderSimple",
+        "_meta": {
+          "title": "Load Checkpoint"
+        }
+      },
+      "5": {
+        "inputs": {
+          "width": 832,
+          "height": 1216,
+          "batch_size": 1
+        },
+        "class_type": "EmptyLatentImage",
+        "_meta": {
+          "title": "Empty Latent Image"
+        }
+      },
+      "6": {
+        "inputs": {
+          "text": "RAW photo, portrait of a beautiful woman in a red dress standing in golden hour sunlight, detailed face, stunning beauty, detailed skin, skin texture, skin pores, 85mm lens, cinematic depth of field, natural lighting, photorealistic, 8k, ultra detailed",
+          "clip": ["4", 1]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": {
+          "title": "CLIP Text Encode (Positive Prompt)"
+        }
+      },
+      "7": {
+        "inputs": {
+          "text": "(octane render, render, drawing, anime, bad photo, bad photography:1.3), (worst quality, low quality, blurry:1.2), (bad teeth, deformed teeth, deformed lips), (bad anatomy, bad proportions:1.1), (deformed iris, deformed pupils), (deformed eyes, bad eyes), (deformed face, ugly face, bad face), (deformed hands, bad hands, fused fingers), morbid, mutilated, mutation, disfigured, extra limbs, extra legs, extra arms, duplicate, watermark, text",
+          "clip": ["4", 1]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": {
+          "title": "CLIP Text Encode (Negative Prompt)"
+        }
+      },
+      "3": {
+        "inputs": {
+          "seed": 42,
+          "steps": 35,
+          "cfg": 3.5,
+          "sampler_name": "dpmpp_2m_sde",
+          "scheduler": "karras",
+          "denoise": 1,
+          "model": ["4", 0],
+          "positive": ["6", 0],
+          "negative": ["7", 0],
+          "latent_image": ["5", 0]
+        },
+        "class_type": "KSampler",
+        "_meta": {
+          "title": "KSampler"
+        }
+      },
+      "8": {
+        "inputs": {
+          "samples": ["3", 0],
+          "vae": ["4", 2]
+        },
+        "class_type": "VAEDecode",
+        "_meta": {
+          "title": "VAE Decode"
+        }
+      },
+      "9": {
+        "inputs": {
+          "filename_prefix": "ComfyUI",
+          "images": ["8", 0]
+        },
+        "class_type": "SaveImage",
+        "_meta": {
+          "title": "Save Image"
+        }
+      }
+    }
+  }
+}
