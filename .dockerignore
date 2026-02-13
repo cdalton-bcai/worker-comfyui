@@ -1,0 +1,4 @@
+# Ignore everything except what the Dockerfile needs
+*
+!Dockerfile.custom
+!winter_girl_lora.safetensors

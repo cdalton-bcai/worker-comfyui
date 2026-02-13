@@ -1,0 +1,73 @@
+{
+  "input": {
+    "workflow": {
+      "4": {
+        "inputs": {
+          "ckpt_name": "lustifySDXLNSFW_ggwpV7.safetensors"
+        },
+        "class_type": "CheckpointLoaderSimple"
+      },
+      "10": {
+        "inputs": {
+          "lora_name": "winter_girl_lora.safetensors",
+          "strength_model": 0.65,
+          "strength_clip": 0.65,
+          "model": ["4", 0],
+          "clip": ["4", 1]
+        },
+        "class_type": "LoraLoader"
+      },
+      "5": {
+        "inputs": {
+          "width": 1024,
+          "height": 1024,
+          "batch_size": 1
+        },
+        "class_type": "EmptyLatentImage"
+      },
+      "6": {
+        "inputs": {
+          "text": "RAW photo, winter_girl, portrait of a beautiful woman with long wavy brown hair with teal highlights, green eyes, wearing a simple white t-shirt, soft natural lighting, high quality, photorealistic",
+          "clip": ["10", 1]
+        },
+        "class_type": "CLIPTextEncode"
+      },
+      "7": {
+        "inputs": {
+          "text": "blurry, low quality, distorted, deformed, anime, cartoon, graphic, (worst quality, low quality:1.4), (bad anatomy, bad proportions:1.2)",
+          "clip": ["10", 1]
+        },
+        "class_type": "CLIPTextEncode"
+      },
+      "3": {
+        "inputs": {
+          "seed": 12345,
+          "steps": 30,
+          "cfg": 3.0,
+          "sampler_name": "dpmpp_2m_sde",
+          "scheduler": "karras",
+          "denoise": 1,
+          "model": ["10", 0],
+          "positive": ["6", 0],
+          "negative": ["7", 0],
+          "latent_image": ["5", 0]
+        },
+        "class_type": "KSampler"
+      },
+      "8": {
+        "inputs": {
+          "samples": ["3", 0],
+          "vae": ["4", 2]
+        },
+        "class_type": "VAEDecode"
+      },
+      "9": {
+        "inputs": {
+          "filename_prefix": "Test_v2",
+          "images": ["8", 0]
+        },
+        "class_type": "SaveImage"
+      }
+    }
+  }
+}

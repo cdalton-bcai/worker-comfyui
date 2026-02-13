@@ -1,102 +1,35 @@
-# Custom worker-comfyui: Lustify v7 GGWP + InstantID + FaceID V2 + FaceDetailer
-# - InstantID: face structure transfer (bone structure, keypoints)
-# - IP-Adapter FaceID Plus V2: face feature transfer (skin, eyes, lips)
-# - FaceDetailer: post-process face fix for wider shots
-# - ControlNet Aux: pre-installed for pose control
+# Custom worker-comfyui: Lustify v7 GGWP + Character LoRA
+# - Lustify v7: SDXL NSFW-optimized photorealistic checkpoint
+# - Character LoRA: trained on reference images for face + body consistency
 #
-# Build: docker build --platform linux/amd64 -f Dockerfile.custom -t cdaltonbcai/comfyui-sdxl:v5-facedetailer .
+# Build: docker build --platform linux/amd64 -f Dockerfile.custom -t cdaltonbcai/comfyui-sdxl:v6-lora .
 
 FROM runpod/worker-comfyui:5.1.0-base
 
 # ============================================================
-# 1. Install Python dependencies for InsightFace (face detection)
+# 1. Download Lustify v7 GGWP checkpoint (~6.9 GB)
 # ============================================================
-RUN apt-get update && apt-get install -y build-essential python3.12-dev && rm -rf /var/lib/apt/lists/*
-RUN uv pip install insightface onnxruntime-gpu
-
-# ============================================================
-# 2. Install custom nodes (all phases pre-installed)
-# ============================================================
-# IP-Adapter Plus + ControlNet Aux from Comfy Registry
-RUN comfy-node-install comfyui_ipadapter_plus comfyui_controlnet_aux
-
-# Impact-Pack (FaceDetailer) via git clone — registry install hangs
-# Skip SAM2 (huge) and install.py (downloads SAM models) — we only need YOLO bbox for FaceDetailer
-RUN cd /comfyui/custom_nodes && \
-    git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git && \
-    cd ComfyUI-Impact-Pack && \
-    uv pip install segment-anything scikit-image piexif opencv-python-headless scipy numpy dill matplotlib ultralytics
-
-# InstantID via git clone (native ComfyUI implementation by cubiq)
-RUN cd /comfyui/custom_nodes && \
-    git clone https://github.com/cubiq/ComfyUI_InstantID.git && \
-    cd ComfyUI_InstantID && \
-    if [ -f requirements.txt ]; then uv pip install -r requirements.txt; fi
-
-# ============================================================
-# 3. Download checkpoint + VAE
-# ============================================================
-# Lustify v7 GGWP - SDXL NSFW-optimized photorealistic model (by coyotte)
 # Recommended: DPM++ 2M SDE karras, CFG 2.5-4.5, 30-35 steps
-RUN comfy model download \
-    --url https://huggingface.co/Kutches/XL/resolve/main/lustifySDXLNSFW_ggwpV7.safetensors \
-    --relative-path models/checkpoints \
-    --filename lustifySDXLNSFW_ggwpV7.safetensors
-
-# SDXL VAE fp16 fix (better color accuracy)
-RUN comfy model download \
-    --url https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors \
-    --relative-path models/vae \
-    --filename sdxl-vae-fp16-fix.safetensors
+RUN wget -q -O /comfyui/models/checkpoints/lustifySDXLNSFW_ggwpV7.safetensors \
+    https://huggingface.co/Kutches/XL/resolve/main/lustifySDXLNSFW_ggwpV7.safetensors
 
 # ============================================================
-# 4. Download InstantID models
+# 2. Download SDXL VAE fp16 fix (~335 MB)
 # ============================================================
-# InstantID main model (IP-Adapter based)
-RUN comfy model download \
-    --url https://huggingface.co/InstantX/InstantID/resolve/main/ip-adapter.bin \
-    --relative-path models/instantid \
-    --filename ip-adapter.bin
-
-# InstantID ControlNet model (face structure guidance)
-RUN comfy model download \
-    --url https://huggingface.co/InstantX/InstantID/resolve/main/ControlNetModel/diffusion_pytorch_model.safetensors \
-    --relative-path models/controlnet \
-    --filename instantid-controlnet.safetensors
+RUN wget -q -O /comfyui/models/vae/sdxl-vae-fp16-fix.safetensors \
+    https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors
 
 # ============================================================
-# 5. Download IP-Adapter FaceID Plus V2 (SDXL) + paired LoRA
+# 3. Character LoRA – Winter Girl (epoch 4, rank 32, alpha 16)
 # ============================================================
-# FaceID Plus V2 model (combines InsightFace embeddings + CLIP vision)
-RUN comfy model download \
-    --url https://huggingface.co/h94/IP-Adapter-FaceID/resolve/main/ip-adapter-faceid-plusv2_sdxl.bin \
-    --relative-path models/ipadapter \
-    --filename ip-adapter-faceid-plusv2_sdxl.bin
-
-# Paired LoRA (required by FaceID Plus V2)
-RUN comfy model download \
-    --url https://huggingface.co/h94/IP-Adapter-FaceID/resolve/main/ip-adapter-faceid-plusv2_sdxl_lora.safetensors \
-    --relative-path models/loras \
-    --filename ip-adapter-faceid-plusv2_sdxl_lora.safetensors
-
-# CLIP Vision encoder (required by FaceID Plus V2 for SDXL)
-RUN comfy model download \
-    --url https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors \
-    --relative-path models/clip_vision \
-    --filename CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors
+# Trigger word: winter_girl  |  Recommended strength: 0.75-0.90
+RUN mkdir -p /comfyui/models/loras
+COPY winter_girl_lora.safetensors /comfyui/models/loras/winter_girl_lora.safetensors
 
 # ============================================================
-# 6. Download face detector for FaceDetailer (ultralytics YOLO)
+# 4. Ensure extra_model_paths.yaml includes local loras path
 # ============================================================
-RUN mkdir -p /comfyui/models/ultralytics/bbox && \
-    wget -q -O /comfyui/models/ultralytics/bbox/face_yolov8m.pt \
-    https://huggingface.co/Bingsu/adetailer/resolve/main/face_yolov8m.pt
-
-# ============================================================
-# 7. Download InsightFace antelopev2 (face detection/embedding)
-# ============================================================
-RUN mkdir -p /comfyui/models/insightface/models/antelopev2 && \
-    wget -q -O /tmp/antelopev2.zip https://huggingface.co/MonsterMMORPG/tools/resolve/main/antelopev2.zip && \
-    python -c "import zipfile; zipfile.ZipFile('/tmp/antelopev2.zip').extractall('/tmp/antelopev2_extract')" && \
-    find /tmp/antelopev2_extract -name '*.onnx' -exec cp {} /comfyui/models/insightface/models/antelopev2/ \; && \
-    rm -rf /tmp/antelopev2.zip /tmp/antelopev2_extract
+RUN echo "" >> /comfyui/extra_model_paths.yaml && \
+    echo "local_models:" >> /comfyui/extra_model_paths.yaml && \
+    echo "  base_path: /comfyui" >> /comfyui/extra_model_paths.yaml && \
+    echo "  loras: models/loras/" >> /comfyui/extra_model_paths.yaml
